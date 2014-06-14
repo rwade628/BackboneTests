@@ -15,10 +15,13 @@
     <header id="header">
       <h2>BattleDots</h2>
     </header>
+    <!-- Initial welcome text and game explanation. -->
     <p> The goal of this game is to find all of the computer's dots before it can find yours. Select new game to begin. Click any of the check boxes to see if a dot exists at the location. Good luck!</p>
+    <!-- Key information -->
     <p>KEY: Correct selections are identified as <font color="lightgreen">*</font> while incorrect selections are idetified as <font color="red">X</font></p>
      <input id="new-game" type="button" value="New Game">
     <section id="main">
+      <!-- Where the view will be appended to -->
       <div id="game-board"></div>
     </section>
   </section>
@@ -27,8 +30,10 @@
   <!-- Templates -->
   <!-- ========= -->
   <script type="text/template" id="board-template">
+  //Template HTML that game view loads. It contains two three by three grids of checkboxes with question marks next to each box. The question marks are replaced with correct (*) or incorrect (X) values as selections are made.
     <div class="grid">
     <h3>Computer</h3>
+    //Grouping computer's and player's check boxes by class allows mass disabling/enabling/checking/unchecking.
       <div id="row1">
       	<input type="checkbox" class="computer" id="1">
         <span id="box1">?</span>
@@ -78,6 +83,7 @@
       	<input type="checkbox" class="player" id="player9">
         <span id="playerBox9">?</span>
       </div>
+      //Initially the player is asked to select their dot locations. This is replaced with an empty string once the user does this.
       <p id="playerSelect">Select the four loctations you would like your dots to be located.</p>
     </div>
   </script> 
@@ -103,15 +109,11 @@
     // Models
     //--------------
   	app.Game = Backbone.Model.extend({
+      //Initialize game model with sample defaults for player and computer locations
   		defaults: {
-  			title: '',
-  			completed: false,
   			playerDots: [1, 4, 8, 9],
   			computerDots: [2, 3, 6, 8],
   			computerChosen: []
-  		},
-  		toggle: function(){
-  			this.save({completed: !this.get('completed')});
   		}
   	});
 
@@ -119,60 +121,77 @@
     // Collections
     //--------------
   	app.GameList = Backbone.Collection.extend({
+      //Initialize collection with the Game model and utilize local storage.
   		model: app.Game,
   		localStorage: new Store("backbone-game"),
   	});
-
+    //Create new collection instance
   	app.gameList = new app.GameList();
 
   	//--------------
     // Views
     //--------------
     app.GameView = Backbone.View.extend({
-    	tagName: 'div',
+      //Loads the template above
     	template: _.template($('#board-template').html()),
     	render: function(){
+        //Sets html to the template
     		this.$el.html(this.template(this.model.toJSON()));
+        //When the game first starts, the user should only be able to select their check boxes
+        //These are used to determine where their dots are located.
+        //Disabling the computer's check boxes prevents the user from disrupting game flow.
         this.$('.computer').prop('disabled', true);
     		return this;
     	},
     	initialize: function(){
+        //Causes the view to re-render any time infomration has changed
     		this.model.on('change', this.render, this);
-    		this.model.on('destroy', this.remove, this);
+        //set Player's dot array to an empty array. They will then populate this when they select their dot locations
         this.model.set({'playerDots' : []});
-        //this.model.set({'playerDots' : [1, 4, 8, 9]});
+        //The code uses the random number generator to choose four locations (between 1-9) for the computer's dots
         var selection = Math.floor(Math.random()*9)+1;
         var array = [];
         while (array.length < 4){
+          //Avoid duplicates by verifying the value is not in the array yet
           if (array.indexOf(selection) < 0) {
+            //Add value to array
             array.push(selection);
           }
+          //Get new random value
           selection = Math.floor(Math.random()*9)+1;
         }
+        //Set the computer's dot array to the array that was just created
         this.model.set({'computerDots' : array});
+        //Empty the computer's selection array. 
+        //As the computer makes new guesses, they are put into an array to ensure that value isn't selected again.
         this.model.set({'computerChosen' : []});
     	},
     	events: {
+        //Add click events to every check box (computer's and player's).
     		'click .computer': 'toggleCompleted',
-    		'click .destroy': 'destroy',
         'click .player': 'addPlayerDots'
     	},
       addPlayerDots: function(e){
+        //This code grabs each check box the user selects and adds it to the player's dot location array
         var array = this.model.get('playerDots');
         var stringID =  $(e.currentTarget).attr("id");
         var id = parseInt(stringID.substr(stringID.length-1));
         array.push(id);
+        //Break out of this method once the user has selected four locations
         if (array.length === 4){
           this.setPlayerDots(array);
         }
+        //For a more fluid UI, the locations that have been checked are converted from '?' to '*' so the user gets immediate feedback
         var dotID = "#playerBox"+id;
         this.$(dotID).html("*");
       },
       setPlayerDots: function(array){
+        //Remove all user's checks and disable the user's boxes. Enable computer's boxes so the user can play the game.
          $('.computer').prop('disabled', false);
          $('.player').prop('disabled', true);
          $('.player').prop('checked', false);
-         this.model.set({'playerDots':array})
+         //For easier visibility and feedback, the user's dot locations are shown but colored black.
+         //When the computer makes a selection that locaiton is colored (red for incorrect and green for correct)
          for (var i = 1; i < 10; i++) {
            var id = "#playerBox"+i
            if (array.indexOf(i) > -1) {
@@ -182,16 +201,21 @@
               this.$(id).html("X");
             }
          };
+         //Erase the text that prompts the user to select their locations.
         this.$("#playerSelect").html("");
       },
     	toggleCompleted: function(e){
         var valid = this.model.get('computerDots');
+        //The id is a string, but numberical values are needed for comparison
         var chosen = parseInt($(e.currentTarget).attr("id"));
+        //Change to a green * or red X depending on if it was a successful selection
     		if (valid.indexOf(chosen) > -1) {
     			var id = $(e.currentTarget).attr("id");
           id = "#box"+id;
     			this.$(id).html("*");
           this.$(id).css('color','lightgreen');
+          //If successful, remove the value from the array of possible locations.
+          //This is used to determine who wins. The first player's array to hit 0 loses.
           valid.splice(valid.indexOf(chosen), 1);
     		}
         else {
@@ -200,24 +224,31 @@
           this.$(id).html("X");
           this.$(id).css('color','red');
         }
+        //Disable that checkbox so the user cannot continue to select it indefinitley.
         $(e.currentTarget).prop('disabled', true);
+        //checkGame is used to determine if either player has one. The parameter passed is the determines whether the player or computer last went.
         this.checkGame('player');
     	},
       computerSelect: function(){
+        //The computer randomly chooses a number between 1-9
         var selection = Math.floor(Math.random()*9)+1;
         var array = this.model.get('computerChosen');
         while (array.indexOf(selection) > -1) {
-          if (array.length > 8){
+          //Avoid infinite loop. If the computer has made nine selections then they have chosen every possible number. 
+          if (array.length === 9){
             break;
           }
+          //Keep selecting a new random number until one that hasn't been chosen is picked
           selection = Math.floor(Math.random()*9)+1;
         }
+        //Add number to the array (for infinite loop purposes)
         array.push(selection);
         var validPlayer = this.model.get('playerDots');
         if (validPlayer.indexOf(selection) > -1) {
           var id = "#playerBox"+selection;
           this.$(id).html("*");
           this.$(id).css('color','lightgreen');
+          //Remove correct selection from array. First array to 0 loses.
           validPlayer.splice(validPlayer.indexOf(selection), 1);
         }
         else {
@@ -225,19 +256,22 @@
           this.$(id).html("X");
           this.$(id).css('color','red');
         }
-        var boxID = "player"+selection;
-        document.getElementById(boxID).checked = true;
-         this.checkGame('computer');
+        var boxID = "#player"+selection;
+        //Check boxes as computer makes selections
+        this.$(boxID).prop('checked',true);
+        this.checkGame('computer');
       },
       checkGame: function(turn){
         var playerDots = this.model.get('playerDots');
         var computersDots = this.model.get('computerDots');
+        // Whichever array hits 0 first, the other player wins. gameOver is called with the winning player
         if (playerDots.length < 1){
           this.gameOver('Computer');
         }
         else if (computersDots.length < 1){
           this.gameOver('Player');
         }
+        //If neither array is 0 and the player just selected, give the computer the chance to select
         else{
           if (turn === 'player') {
             this.computerSelect();
@@ -245,40 +279,35 @@
         }
       },
       gameOver: function(winner){
+        //Disable's all computer's check boxes and displays the winner at the bottom of the page.
         $('.computer').prop('disabled', true);
         this.$el.append("<p>Game over! "+winner+" is the winner.</p>");
-      },
-    	destroy: function(){
-    		this.model.destroy();
-    	}
+      }
     });
 
 
-
+//main view that launches the "game"
     app.AppView = Backbone.View.extend({
     	el: '#battledotsapp',
     	initialize: function() {
-    		this.input = this.$('#new-game');
-
-    		app.gameList.on('add', this.addOne, this);
+        //Triggered when a new "board" is added to the collection. It then loads the game's view.
+    		app.gameList.on('add', this.add, this);
+        //Fetch initializes the default values for the model in the collection.
     		app.gameList.fetch();
     	},
     	events: {
+        //Event listener for the New Game button. Launches the createGame method.
     		'click #new-game': 'createGame'
     	},
     	createGame: function(e){
-    		app.gameList.create(this.newAttributes());
-    		//this.input.val('New Game');
+        //Add's one new Game model to the Collection
+    		app.gameList.create();
     	},
-    	addOne: function(game){
+    	add: function(game){
+        // Creates a new game view using the previously created game model (in createGame)
     		var view = new app.GameView({model: game});
+        //Loads the board's html into to the game-board <div>
     		$('#game-board').html(view.render().el);
-    	},
-    	newAttributes:function(){
-    		return{
-    			title: this.input.val().trim(),
-    			completed: false
-    		}
     	}
     });
 
